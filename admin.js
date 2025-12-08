@@ -882,3 +882,310 @@ function getStudents() {
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', initAdminPage);
+// 云端数据管理功能
+const CloudAdmin = {
+    // 从云端加载所有数据
+    loadFromCloud: async function() {
+        try {
+            showToast('正在从云端加载数据...', 'info');
+            
+            const cloudData = await CloudflareKV.getAllData();
+            
+            if (cloudData.students) {
+                // 更新本地存储
+                localStorage.setItem('students', JSON.stringify(cloudData.students));
+                
+                // 更新训练数据
+                if (cloudData.trainingData) {
+                    for (const [studentId, data] of Object.entries(cloudData.trainingData)) {
+                        if (data.sessions) {
+                            localStorage.setItem(`sessions_${studentId}`, JSON.stringify(data.sessions));
+                        }
+                        if (data.progress) {
+                            localStorage.setItem(`progress_${studentId}`, JSON.stringify(data.progress));
+                        }
+                        if (data.score !== undefined) {
+                            localStorage.setItem(`score_${studentId}`, data.score.toString());
+                        }
+                    }
+                }
+                
+                // 更新系统数据
+                if (cloudData.systemData) {
+                    if (cloudData.systemData.backups) {
+                        localStorage.setItem('system_backups', JSON.stringify(cloudData.systemData.backups));
+                    }
+                    if (cloudData.systemData.lastBackup) {
+                        localStorage.setItem('last_backup', cloudData.systemData.lastBackup);
+                    }
+                }
+                
+                // 重新加载UI
+                loadAllData();
+                showToast('云端数据加载成功', 'success');
+                return true;
+            } else {
+                showToast('云端没有数据', 'warning');
+                return false;
+            }
+        } catch (error) {
+            console.error('从云端加载失败:', error);
+            showToast(`加载失败: ${error.message}`, 'error');
+            return false;
+        }
+    },
+    
+    // 强制同步到云端
+    forceSyncToCloud: async function() {
+        try {
+            showToast('正在同步到云端...', 'info');
+            
+            const result = await SyncManager.manualSync();
+            
+            if (result.success) {
+                showToast('同步到云端成功', 'success');
+            } else {
+                showToast(result.message, 'error');
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('强制同步失败:', error);
+            showToast(`同步失败: ${error.message}`, 'error');
+            return { success: false, message: error.message };
+        }
+    },
+    
+    // 比较云端和本地数据
+    compareData: async function() {
+        try {
+            const localStudents = getStudents();
+            let cloudStudents = [];
+            
+            try {
+                const cloudData = await CloudflareKV.getFromCloud('students');
+                cloudStudents = cloudData || [];
+            } catch (error) {
+                console.log('无法获取云端学生数据');
+            }
+            
+            const differences = {
+                localOnly: localStudents.filter(local => 
+                    !cloudStudents.some(cloud => cloud.id === local.id)
+                ),
+                cloudOnly: cloudStudents.filter(cloud => 
+                    !localStudents.some(local => local.id === cloud.id)
+                ),
+                conflicts: []
+            };
+            
+            // 找出冲突（同ID但内容不同）
+            for (const local of localStudents) {
+                const cloud = cloudStudents.find(c => c.id === local.id);
+                if (cloud && JSON.stringify(local) !== JSON.stringify(cloud)) {
+                    differences.conflicts.push({
+                        id: local.id,
+                        local: local,
+                        cloud: cloud
+                    });
+                }
+            }
+            
+            return differences;
+        } catch (error) {
+            console.error('比较数据失败:', error);
+            return null;
+        }
+    },
+    
+    // 解决数据冲突
+    resolveConflict: async function(studentId, useCloudData) {
+        try {
+            if (useCloudData) {
+                // 使用云端数据覆盖本地
+                const cloudData = await CloudflareKV.getAllData();
+                if (cloudData.trainingData[studentId]) {
+                    const data = cloudData.trainingData[studentId];
+                    localStorage.setItem(`sessions_${studentId}`, JSON.stringify(data.sessions || []));
+                    localStorage.setItem(`progress_${studentId}`, JSON.stringify(data.progress || null));
+                    localStorage.setItem(`score_${studentId}`, (data.score || 0).toString());
+                }
+                showToast(`已使用云端数据覆盖 ${studentId}`, 'success');
+            } else {
+                // 使用本地数据覆盖云端
+                const sessions = localStorage.getItem(`sessions_${studentId}`);
+                const progress = localStorage.getItem(`progress_${studentId}`);
+                const score = localStorage.getItem(`score_${studentId}`);
+                
+                if (sessions) await CloudflareKV.saveData(`sessions_${studentId}`, JSON.parse(sessions));
+                if (progress) await CloudflareKV.saveData(`progress_${studentId}`, JSON.parse(progress));
+                if (score) await CloudflareKV.saveData(`score_${studentId}`, score);
+                
+                showToast(`已将本地数据同步到云端 ${studentId}`, 'success');
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('解决冲突失败:', error);
+            showToast(`解决冲突失败: ${error.message}`, 'error');
+            return false;
+        }
+    }
+};
+
+// 在admin页面添加云端管理界面
+function addCloudManagementUI() {
+    const dataSection = document.getElementById('dataSection');
+    
+    const cloudManagementHTML = `
+        <div class="cloud-management">
+            <h3><i class="fas fa-cloud"></i> 云端数据管理</h3>
+            
+            <div class="cloud-controls">
+                <div class="cloud-status" id="cloudStatus">
+                    检查云端状态...
+                </div>
+                
+                <div class="cloud-buttons">
+                    <button id="loadFromCloudBtn" class="action-btn">
+                        <i class="fas fa-cloud-download-alt"></i> 从云端加载
+                    </button>
+                    <button id="syncToCloudBtn" class="action-btn">
+                        <i class="fas fa-cloud-upload-alt"></i> 同步到云端
+                    </button>
+                    <button id="compareDataBtn" class="action-btn">
+                        <i class="fas fa-exchange-alt"></i> 比较数据
+                    </button>
+                </div>
+                
+                <div class="sync-status" id="syncStatus">
+                    同步状态: 检查中...
+                </div>
+                
+                <div id="dataComparison" style="display: none; margin-top: 20px;">
+                    <!-- 数据比较结果会显示在这里 -->
+                </div>
+            </div>
+        </div>
+    `;
+    
+    dataSection.insertAdjacentHTML('afterbegin', cloudManagementHTML);
+    
+    // 添加事件监听
+    document.getElementById('loadFromCloudBtn').addEventListener('click', () => {
+        CloudAdmin.loadFromCloud();
+    });
+    
+    document.getElementById('syncToCloudBtn').addEventListener('click', () => {
+        CloudAdmin.forceSyncToCloud();
+    });
+    
+    document.getElementById('compareDataBtn').addEventListener('click', async () => {
+        const differences = await CloudAdmin.compareData();
+        displayDataComparison(differences);
+    });
+    
+    // 更新状态
+    updateCloudStatus();
+    setInterval(updateCloudStatus, 60000); // 每分钟更新一次
+}
+
+// 更新云端状态显示
+function updateCloudStatus() {
+    const status = SyncManager.getStatus();
+    const cloudStatus = document.getElementById('cloudStatus');
+    const syncStatus = document.getElementById('syncStatus');
+    
+    let cloudText = '';
+    let syncText = '';
+    
+    if (CloudflareKV.isOnline()) {
+        cloudText = '<span style="color: #28a745;">✓ 云端连接正常</span>';
+    } else {
+        cloudText = '<span style="color: #dc3545;">✗ 云端不可用（使用本地模式）</span>';
+    }
+    
+    syncText = `同步状态: ${status.isSyncing ? '同步中...' : '就绪'}`;
+    if (status.lastSyncTime) {
+        const lastSync = new Date(status.lastSyncTime).toLocaleTimeString('zh-CN');
+        syncText += ` | 上次同步: ${lastSync}`;
+    }
+    if (status.queueLength > 0) {
+        syncText += ` | 待同步: ${status.queueLength} 条`;
+    }
+    
+    cloudStatus.innerHTML = cloudText;
+    syncStatus.textContent = syncText;
+}
+
+// 显示数据比较结果
+function displayDataComparison(differences) {
+    const container = document.getElementById('dataComparison');
+    
+    if (!differences) {
+        container.innerHTML = '<div class="alert alert-danger">无法获取比较结果</div>';
+        container.style.display = 'block';
+        return;
+    }
+    
+    let html = '<h4>数据比较结果</h4>';
+    
+    // 本地独有的数据
+    if (differences.localOnly.length > 0) {
+        html += `<div class="alert alert-info">
+            <strong>本地独有 (${differences.localOnly.length}):</strong><br>
+            ${differences.localOnly.map(s => s.name).join(', ')}
+        </div>`;
+    }
+    
+    // 云端独有的数据
+    if (differences.cloudOnly.length > 0) {
+        html += `<div class="alert alert-warning">
+            <strong>云端独有 (${differences.cloudOnly.length}):</strong><br>
+            ${differences.cloudOnly.map(s => s.name).join(', ')}
+        </div>`;
+    }
+    
+    // 冲突数据
+    if (differences.conflicts.length > 0) {
+        html += `<div class="alert alert-danger">
+            <strong>数据冲突 (${differences.conflicts.length}):</strong>
+        </div>`;
+        
+        differences.conflicts.forEach(conflict => {
+            html += `
+                <div class="conflict-item">
+                    <p><strong>学号: ${conflict.id}</strong></p>
+                    <div class="row">
+                        <div class="col">
+                            <strong>本地数据:</strong>
+                            <pre>${JSON.stringify(conflict.local, null, 2)}</pre>
+                        </div>
+                        <div class="col">
+                            <strong>云端数据:</strong>
+                            <pre>${JSON.stringify(conflict.cloud, null, 2)}</pre>
+                        </div>
+                    </div>
+                    <div class="conflict-actions">
+                        <button class="btn btn-sm btn-success" onclick="resolveConflict('${conflict.id}', true)">
+                            使用云端数据
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="resolveConflict('${conflict.id}', false)">
+                            使用本地数据
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    // 没有差异
+    if (differences.localOnly.length === 0 && 
+        differences.cloudOnly.length === 0 && 
+        differences.conflicts.length === 0) {
+        html += '<div class="alert alert-success">本地和云端数据完全一致</div>';
+    }
+    
+    container.innerHTML = html;
+    container.style.display = 'block';
+}
