@@ -1,0 +1,12 @@
+name = "pep-unit3-learning-system"
+type = "javascript"
+account_id = "your_account_id_here"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "PEPT_KV"
+id = "kv_id_for_your_namespace"
+
+[site]
+bucket = "./"
+entry-point = "worker"
