@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员后台 - PEP Unit3 Learning System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="admin-page">
+    <div class="admin-container">
+        <!-- 管理员头部 -->
+        <header class="admin-header">
+            <h1>
+                <i class="fas fa-cogs"></i> 
+                PEP Unit3 Learning System - 管理员后台
+            </h1>
+            <div class="admin-info">
+                <span>管理员: 叶金炎</span>
+                <button id="adminLogout" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </button>
+            </div>
+        </header>
+
+        <!-- 管理员导航 -->
+        <nav class="admin-nav">
+            <button class="admin-nav-btn active" data-section="students">
+                <i class="fas fa-users"></i> 学生管理
+            </button>
+            <button class="admin-nav-btn" data-section="training">
+                <i class="fas fa-chart-bar"></i> 训练情况
+            </button>
+            <button class="admin-nav-btn" data-section="data">
+                <i class="fas fa-database"></i> 数据管理
+            </button>
+        </nav>
+
+        <!-- 内容区域 -->
+        <main class="admin-content">
+            <!-- 学生管理 -->
+            <section id="studentsSection" class="admin-section active">
+                <div class="section-header">
+                    <h2><i class="fas fa-user-plus"></i> 学生信息管理</h2>
+                    <div class="section-controls">
+                        <button id="addStudentBtn" class="action-btn">
+                            <i class="fas fa-plus"></i> 添加学生
+                        </button>
+                        <button id="importStudentsBtn" class="action-btn">
+                            <i class="fas fa-file-import"></i> 批量导入
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 添加学生表单 -->
+                <div id="addStudentForm" class="add-form" style="display: none;">
+                    <h3>添加新学生</h3>
+                    <form id="newStudentForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>姓名</label>
+                                <input type="text" id="newName" required>
+                            </div>
+                            <div class="form-group">
+                                <label>学号</label>
+                                <input type="text" id="newStudentId" required>
+                            </div>
+                            <div class="form-group">
+                                <label>密码</label>
+                                <input type="text" id="newPassword" value="123456yy" required>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="save-btn">
+                                <i class="fas fa-save"></i> 保存
+                            </button>
+                            <button type="button" class="cancel-btn" id="cancelAdd">
+                                取消
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 批量导入 -->
+                <div id="importSection" class="import-section" style="display: none;">
+                    <h3>批量导入学生</h3>
+                    <div class="import-options">
+                        <div class="import-method">
+                            <h4>方法一：粘贴Excel数据</h4>
+                            <textarea id="excelData" placeholder="请从Excel复制数据并粘贴到这里...
+格式：姓名  学号  密码
+岑乐宸  CL001  123456yy
+岑宇铠  CL002  123456yy"></textarea>
+                            <button id="pasteImportBtn" class="action-btn">
+                                <i class="fas fa-paste"></i> 导入粘贴的数据
+                            </button>
+                        </div>
+                        
+                        <div class="import-method">
+                            <h4>方法二：上传文件</h4>
+                            <input type="file" id="studentFile" accept=".csv,.xlsx,.json">
+                            <button id="uploadImportBtn" class="action-btn">
+                                <i class="fas fa-upload"></i> 上传并导入
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学生列表 -->
+                <div class="data-table-container">
+                    <h3>学生列表</h3>
+                    <div class="table-controls">
+                        <div class="search-box">
+                            <input type="text" id="studentSearch" placeholder="搜索学生...">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="table-info">
+                            共 <span id="studentCount">0</span> 名学生
+                        </div>
+                    </div>
+                    
+                    <div class="table-wrapper">
+                        <table id="studentsTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>序号</th>
+                                    <th>姓名</th>
+                                    <th>学号</th>
+                                    <th>密码</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 学生数据将通过JavaScript动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 训练情况 -->
+            <section id="trainingSection" class="admin-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-line"></i> 学生训练情况</h2>
+                    <div class="section-controls">
+                        <select id="dateFilter">
+                            <option value="all">所有日期</option>
+                            <option value="today">今天</option>
+                            <option value="week">本周</option>
+                            <option value="month">本月</option>
+                        </select>
+                        <button id="exportTrainingBtn" class="action-btn">
+                            <i class="fas fa-download"></i> 导出数据
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stats-cards">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalStudents">0</h3>
+                            <p>总学生数</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="avgTime">0</h3>
+                            <p>平均训练时间(分钟)</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="avgScore">0</h3>
+                            <p>平均分数</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="completedCount">0</h3>
+                            <p>完成训练人数</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="data-table-container">
+                    <h3>训练记录</h3>
+                    <div class="table-controls">
+                        <select id="studentFilter">
+                            <option value="all">所有学生</option>
+                        </select>
+                        <button id="exportSelectedBtn" class="action-btn">
+                            <i class="fas fa-file-export"></i> 导出选中
+                        </button>
+                    </div>
+                    
+                    <div class="table-wrapper">
+                        <table id="trainingTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAll"></th>
+                                    <th>学生姓名</th>
+                                    <th>登录日期</th>
+                                    <th>训练时间</th>
+                                    <th>基础训练分</th>
+                                    <th>提升训练分</th>
+                                    <th>总分</th>
+                                    <th>完成状态</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 训练数据将通过JavaScript动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 数据管理 -->
+            <section id="dataSection" class="admin-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-database"></i> 系统数据管理</h2>
+                </div>
+
+                <div class="data-management">
+                    <div class="data-card">
+                        <div class="data-icon">
+                            <i class="fas fa-download"></i>
+                        </div>
+                        <h3>备份数据</h3>
+                        <p>下载所有系统数据备份文件</p>
+                        <button id="backupDataBtn" class="data-btn">
+                            <i class="fas fa-save"></i> 备份数据
+                        </button>
+                    </div>
+
+                    <div class="data-card">
+                        <div class="data-icon">
+                            <i class="fas fa-upload"></i>
+                        </div>
+                        <h3>恢复数据</h3>
+                        <p>从备份文件恢复系统数据</p>
+                        <input type="file" id="restoreFile" accept=".json" style="display: none;">
+                        <button id="restoreDataBtn" class="data-btn">
+                            <i class="fas fa-history"></i> 恢复数据
+                        </button>
+                    </div>
+
+                    <div class="data-card warning">
+                        <div class="data-icon">
+                            <i class="fas fa-trash-alt"></i>
+                        </div>
+                        <h3>清除数据</h3>
+                        <p>清除所有训练记录（学生信息保留）</p>
+                        <button id="clearTrainingDataBtn" class="data-btn warning-btn">
+                            <i class="fas fa-broom"></i> 清除训练数据
+                        </button>
+                    </div>
+
+                    <div class="data-card danger">
+                        <div class="data-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <h3>重置系统</h3>
+                        <p>重置所有数据到初始状态</p>
+                        <button id="resetSystemBtn" class="data-btn danger-btn">
+                            <i class="fas fa-redo"></i> 重置系统
+                        </button>
+                    </div>
+                </div>
+
+                <div class="system-info">
+                    <h3>系统信息</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">系统版本:</span>
+                            <span class="info-value">Pep Unit3 Learning System v1.0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">数据存储:</span>
+                            <span class="info-value" id="storageStatus">检查中...</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">学生数量:</span>
+                            <span class="info-value" id="systemStudentCount">0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">训练记录:</span>
+                            <span class="info-value" id="trainingRecordCount">0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">最后备份:</span>
+                            <span class="info-value" id="lastBackup">无</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 确认对话框 -->
+        <div id="confirmDialog" class="confirm-dialog">
+            <div class="dialog-content">
+                <h3 id="dialogTitle">确认操作</h3>
+                <p id="dialogMessage">确定要执行此操作吗？</p>
+                <div class="dialog-actions">
+                    <button id="dialogConfirm" class="confirm-btn">确定</button>
+                    <button id="dialogCancel" class="cancel-btn">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 消息提示 -->
+        <div id="messageToast" class="message-toast">
+            <span id="toastMessage">操作成功！</span>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

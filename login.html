@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - PEP Unit3 Learning System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-header">
+            <h1><i class="fas fa-graduation-cap"></i> PEP Unit3 Learning System</h1>
+            <p>小学英语六年级上册 Unit 3 学练系统</p>
+        </div>
+        
+        <div class="login-box">
+            <h2>用户登录</h2>
+            
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="username">
+                        <i class="fas fa-user"></i> 用户名/姓名
+                    </label>
+                    <input type="text" id="username" name="username" required 
+                           placeholder="请输入姓名或学号">
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i> 密码
+                    </label>
+                    <input type="password" id="password" name="password" required 
+                           placeholder="请输入密码">
+                </div>
+                
+                <div class="input-group">
+                    <label for="loginType">
+                        <i class="fas fa-users"></i> 登录类型
+                    </label>
+                    <select id="loginType" name="loginType">
+                        <option value="student">学生登录</option>
+                        <option value="admin">管理员登录</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i> 登录
+                </button>
+                
+                <div class="login-hint">
+                    <p><strong>学生登录：</strong>使用姓名和密码登录（如：岑乐宸 / 123456yy）</p>
+                    <p><strong>管理员登录：</strong>用户名：叶金炎，密码：yjy897018@</p>
+                    <p><strong>测试账号：</strong>姓名：测试，密码：123456yy</p>
+                </div>
+            </form>
+            
+            <div id="loginMessage" class="login-message"></div>
+        </div>
+        
+        <div class="login-footer">
+            <p>© 2023 PEP小学英语学练系统 | 技术支持</p>
+        </div>
+    </div>
+    
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEP小学英语六年级上册Unit 3学练系统</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 系统标题 -->
+        <header class="header">
+            <h1 class="system-title">PEP小学英语六年级上册Unit 3学练系统</h1>
+            
+            <!-- 用户信息栏 -->
+            <div class="user-info-bar">
+                <div class="user-name">
+                    <i class="fas fa-user"></i>
+                    <span id="currentUser">未登录</span>
+                </div>
+                <div class="current-time">
+                    <i class="fas fa-clock"></i>
+                    <span id="currentTime">--:--:--</span>
+                </div>
+                <div class="current-score">
+                    <i class="fas fa-star"></i>
+                    <span id="currentScore">0</span> 分
+                </div>
+            </div>
+            
+            <!-- 导航栏 -->
+            <nav class="nav-tabs">
+                <button class="tab-btn active" data-tab="basic">基础学练</button>
+                <button class="tab-btn" data-tab="advanced">提升学练</button>
+                <button class="tab-btn logout-btn" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </button>
+            </nav>
+        </header>
+
+        <!-- 学练内容区域 -->
+        <main class="content-area">
+            <!-- 基础学练模块 -->
+            <section id="basic-training" class="training-section active">
+                <div class="section-header">
+                    <h2><i class="fas fa-language"></i> 基础学练</h2>
+                    <div class="progress-info">
+                        <span>进度: <span id="basicProgress">0</span>/<span id="basicTotal">0</span></span>
+                        <span>已完成: <span id="basicCompleted">0</span>项</span>
+                    </div>
+                </div>
+                
+                <div class="category-selector">
+                    <button class="category-btn active" data-category="vocabulary">核心词汇与短语</button>
+                    <button class="category-btn" data-category="sentences">重点句型与对话</button>
+                    <button class="category-btn" data-category="passages">综合范文与语段</button>
+                </div>
+                
+                <div class="training-content">
+                    <div class="current-item">
+                        <h3 id="itemTitle">请选择学习内容</h3>
+                        <div class="item-content">
+                            <div class="english-text" id="englishText">--</div>
+                            <div class="chinese-text" id="chineseText">--</div>
+                        </div>
+                        
+                        <div class="audio-controls">
+                            <button class="audio-btn" id="listenBtn">
+                                <i class="fas fa-volume-up"></i> 听原音
+                            </button>
+                            <button class="audio-btn record-btn" id="recordBtn">
+                                <i class="fas fa-microphone"></i> 跟读
+                            </button>
+                            <button class="audio-btn" id="playbackBtn" disabled>
+                                <i class="fas fa-play"></i> 播放我的跟读
+                            </button>
+                        </div>
+                        
+                        <div class="recording-status" id="recordingStatus">
+                            准备就绪
+                        </div>
+                        
+                        <div class="score-feedback" id="scoreFeedback">
+                            请跟读获取评分
+                        </div>
+                        
+                        <div class="navigation-buttons">
+                            <button class="nav-btn" id="prevBtn">
+                                <i class="fas fa-arrow-left"></i> 上一项
+                            </button>
+                            <button class="nav-btn next-btn" id="nextBtn">
+                                下一项 <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="item-list">
+                        <h4>学习列表</h4>
+                        <div id="itemListContainer">
+                            <!-- 项目列表将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 提升学练模块 -->
+            <section id="advanced-training" class="training-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-line"></i> 提升学练</h2>
+                    <div class="progress-info">
+                        <span>进度: <span id="advancedProgress">0</span>/<span id="advancedTotal">0</span></span>
+                        <span>得分: <span id="advancedScore">0</span></span>
+                    </div>
+                </div>
+                
+                <div class="exercise-selector">
+                    <button class="exercise-btn active" data-exercise="1">阅读理解训练（一）</button>
+                    <button class="exercise-btn" data-exercise="2">阅读理解训练（二）</button>
+                    <button class="exercise-btn" data-exercise="3">阅读理解训练（三）</button>
+                </div>
+                
+                <div class="exercise-content">
+                    <div class="reading-passage">
+                        <h3 id="passageTitle">阅读理解文章</h3>
+                        <div class="passage-text" id="passageText">
+                            <!-- 文章内容将通过JavaScript动态加载 -->
+                        </div>
+                    </div>
+                    
+                    <div class="questions-section">
+                        <div id="questionsContainer">
+                            <!-- 问题将通过JavaScript动态生成 -->
+                        </div>
+                        
+                        <div class="exercise-controls">
+                            <button class="submit-btn" id="submitAnswersBtn">
+                                <i class="fas fa-paper-plane"></i> 提交答案
+                            </button>
+                            <button class="reset-btn" id="resetAnswersBtn">
+                                <i class="fas fa-redo"></i> 重置答案
+                            </button>
+                        </div>
+                        
+                        <div class="results-section" id="resultsSection">
+                            <!-- 结果将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 祝贺特效容器 -->
+        <div id="celebrationContainer" class="celebration-container">
+            <div class="celebration-message">
+                <h1 id="congratulationText">Excellent!</h1>
+                <p>恭喜你完成了所有训练！</p>
+                <button class="close-celebration" id="closeCelebration">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音频元素 -->
+    <audio id="celebrationSound" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/201/201-preview.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
