@@ -170,7 +170,26 @@
     <audio id="celebrationSound" preload="auto">
         <source src="https://assets.mixkit.co/active_storage/sfx/201/201-preview.mp3" type="audio/mpeg">
     </audio>
+<!-- 语音功能提示 -->
+<div id="speechHelp" style="display:none; position:fixed; bottom:20px; right:20px; background:#fff; padding:15px; border-radius:10px; box-shadow:0 5px 15px rgba(0,0,0,0.2); z-index:1000; max-width:300px;">
+    <h4 style="margin-top:0;">语音功能使用提示</h4>
+    <p>1. 使用Chrome或Edge浏览器效果最佳</p>
+    <p>2. 点击"听原音"播放英语发音</p>
+    <p>3. 点击"跟读"开始录音，说完后自动评分</p>
+    <p>4. 首次使用需要允许麦克风权限</p>
+    <button onclick="document.getElementById('speechHelp').style.display='none'" style="margin-top:10px; padding:8px 15px; background:#667eea; color:white; border:none; border-radius:5px; cursor:pointer;">知道了</button>
+</div>
 
+<script>
+// 显示语音帮助提示
+setTimeout(() => {
+    const speechHelp = document.getElementById('speechHelp');
+    if (speechHelp && !localStorage.getItem('speechHelpShown')) {
+        speechHelp.style.display = 'block';
+        localStorage.setItem('speechHelpShown', 'true');
+    }
+}, 3000);
+</script>
     <script src="script.js"></script>
 </body>
 </html>
