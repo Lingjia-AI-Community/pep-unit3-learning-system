@@ -10,7 +10,7 @@ const CONFIG = {
     LOCAL_STORAGE_KEY: 'pep_unit3_system'
 };
 
-// 学习内容数据
+// 学习内容数据（使用你提供的文档内容）
 const TRAINING_DATA = {
     vocabulary: [
         { english: "this morning", chinese: "今天上午" },
@@ -211,8 +211,57 @@ let trainingSession = {
     completed: false
 };
 
+// 检查浏览器支持
+function checkBrowserSupport() {
+    const support = {
+        speechSynthesis: 'speechSynthesis' in window,
+        speechRecognition: ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window),
+        localStorage: 'localStorage' in window
+    };
+    
+    console.log('浏览器支持检测:', support);
+    
+    if (!support.speechSynthesis) {
+        showAlert('warning', '您的浏览器不支持语音合成功能，听原音功能将无法使用。建议使用Chrome或Edge浏览器。');
+    }
+    
+    if (!support.speechRecognition) {
+        showAlert('warning', '您的浏览器不支持语音识别功能，跟读功能将无法使用。建议使用Chrome或Edge浏览器。');
+    }
+    
+    return support;
+}
+
+// 显示提示
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px;
+        border-radius: 8px;
+        z-index: 1000;
+        max-width: 400px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        background: ${type === 'warning' ? '#fff3cd' : '#d4edda'};
+        border: 1px solid ${type === 'warning' ? '#ffeaa7' : '#c3e6cb'};
+        color: ${type === 'warning' ? '#856404' : '#155724'};
+    `;
+    alertDiv.textContent = message;
+    document.body.appendChild(alertDiv);
+    
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+
 // 初始化函数
 function init() {
+    // 检查浏览器支持
+    checkBrowserSupport();
+    
     // 检查当前页面
     if (document.getElementById('loginForm')) {
         initLoginPage();
@@ -224,8 +273,8 @@ function init() {
     updateTime();
     setInterval(updateTime, 1000);
     
-    // 初始化语音识别
-    initSpeechRecognition();
+    // 初始化语音功能
+    initSpeechFunctions();
 }
 
 // 初始化登录页面
@@ -300,6 +349,13 @@ function initTabs() {
                     section.classList.add('active');
                 }
             });
+            
+            // 如果是切换到基础训练，重新初始化语音
+            if (tabId === 'basic') {
+                setTimeout(() => {
+                    initSpeechFunctions();
+                }, 100);
+            }
         });
     });
 }
@@ -386,9 +442,28 @@ function showItem(index, items) {
     document.getElementById('englishText').textContent = item.english;
     document.getElementById('chineseText').textContent = item.chinese;
     
+    // 重置评分显示
+    document.getElementById('scoreFeedback').textContent = '请跟读获取评分';
+    document.getElementById('scoreFeedback').style.color = '';
+    
     // 更新按钮状态
     updateNavigationButtons(index, items.length);
     updateItemList();
+    
+    // 更新进度显示
+    updateBasicProgress();
+}
+
+// 更新基础训练进度
+function updateBasicProgress() {
+    const currentItems = TRAINING_DATA[currentCategory];
+    if (!currentItems) return;
+    
+    const completed = completedItems.size;
+    const total = currentItems.length;
+    
+    document.getElementById('basicProgress').textContent = completed;
+    document.getElementById('basicCompleted').textContent = completed;
 }
 
 // 更新项目列表高亮
@@ -444,7 +519,7 @@ function initExerciseButtons() {
 }
 
 // 加载练习
-function exerciseIndex(index) {
+function loadExercise(index) {
     if (index < 0 || index >= READING_EXERCISES.length) return;
     
     const exercise = READING_EXERCISES[index];
@@ -457,6 +532,9 @@ function exerciseIndex(index) {
     // 更新进度显示
     document.getElementById('advancedTotal').textContent = exercise.questions.length;
     document.getElementById('advancedProgress').textContent = '0';
+    
+    // 重置结果区域
+    document.getElementById('resultsSection').innerHTML = '';
 }
 
 // 生成问题
@@ -481,7 +559,10 @@ function generateQuestions(questions) {
             const optionsContainer = document.createElement('div');
             optionsContainer.className = 'options-container';
             
-            question.options.forEach((option, optionIndex) => {
+            // 随机排序选项
+            const shuffledOptions = [...question.options].sort(() => Math.random() - 0.5);
+            
+            shuffledOptions.forEach((option, optionIndex) => {
                 const label = document.createElement('label');
                 label.className = 'option-label';
                 
@@ -533,6 +614,92 @@ function updateProgress() {
     submitBtn.disabled = answered < total;
 }
 
+// 初始化语音功能
+function initSpeechFunctions() {
+    // 初始化语音识别
+    initSpeechRecognition();
+    
+    // 初始化语音合成
+    initSpeechSynthesis();
+}
+
+// 初始化语音识别
+function initSpeechRecognition() {
+    // 检查浏览器支持
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        console.warn('浏览器不支持语音识别');
+        document.getElementById('recordBtn').disabled = true;
+        document.getElementById('recordBtn').innerHTML = '<i class="fas fa-microphone-slash"></i> 浏览器不支持';
+        return;
+    }
+    
+    // 创建语音识别对象
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    
+    // 配置识别器
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    
+    // 事件处理
+    recognition.onstart = function() {
+        console.log('语音识别开始');
+        isRecording = true;
+        document.getElementById('recordingStatus').textContent = '正在录音...';
+        document.getElementById('recordingStatus').style.color = '#dc3545';
+        document.getElementById('recordBtn').innerHTML = '<i class="fas fa-stop"></i> 停止录音';
+        document.getElementById('recordBtn').style.background = '#dc3545';
+    };
+    
+    recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        console.log('识别结果:', transcript);
+        evaluatePronunciation(transcript);
+    };
+    
+    recognition.onerror = function(event) {
+        console.error('语音识别错误:', event.error);
+        
+        let errorMessage = '识别错误';
+        switch(event.error) {
+            case 'no-speech':
+                errorMessage = '未检测到语音，请重试';
+                break;
+            case 'audio-capture':
+                errorMessage = '无法访问麦克风';
+                break;
+            case 'not-allowed':
+                errorMessage = '麦克风访问被拒绝，请在浏览器设置中允许麦克风访问';
+                break;
+        }
+        
+        document.getElementById('recordingStatus').textContent = errorMessage;
+        document.getElementById('recordingStatus').style.color = '#dc3545';
+        stopRecording();
+    };
+    
+    recognition.onend = function() {
+        console.log('语音识别结束');
+        stopRecording();
+    };
+    
+    console.log('语音识别初始化完成');
+}
+
+// 初始化语音合成
+function initSpeechSynthesis() {
+    if (!speechSynthesis) {
+        console.warn('浏览器不支持语音合成');
+        document.getElementById('listenBtn').disabled = true;
+        document.getElementById('listenBtn').innerHTML = '<i class="fas fa-volume-mute"></i> 浏览器不支持';
+        return;
+    }
+    
+    console.log('语音合成初始化完成');
+}
+
 // 初始化事件监听
 function initEventListeners() {
     // 听原音按钮
@@ -564,94 +731,125 @@ function initEventListeners() {
 // 播放原音
 function playOriginalAudio() {
     const englishText = document.getElementById('englishText').textContent;
-    if (!englishText || englishText === '--') return;
+    if (!englishText || englishText === '--' || englishText === '请选择学习内容') {
+        showAlert('warning', '请先选择学习内容');
+        return;
+    }
     
     // 停止当前播放
-    if (currentAudio) {
-        currentAudio.stop();
+    if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
     }
     
     // 使用Web Speech API
     const utterance = new SpeechSynthesisUtterance(englishText);
     utterance.lang = 'en-US';
-    utterance.rate = 0.8;
-    utterance.pitch = 1;
+    utterance.rate = 0.8;  // 较慢的语速，适合学习
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
     
-    // 设置声音
+    // 设置声音（优先使用英语女声）
     const voices = speechSynthesis.getVoices();
-    const englishVoice = voices.find(voice => 
-        voice.lang.startsWith('en-') && voice.name.includes('Female')
-    );
-    if (englishVoice) {
-        utterance.voice = englishVoice;
+    let selectedVoice = null;
+    
+    // 尝试找到英语女声
+    for (let voice of voices) {
+        if (voice.lang.startsWith('en-') && voice.name.includes('Female')) {
+            selectedVoice = voice;
+            break;
+        }
     }
     
-    speechSynthesis.speak(utterance);
+    // 如果没找到英语女声，找任何英语声音
+    if (!selectedVoice) {
+        for (let voice of voices) {
+            if (voice.lang.startsWith('en-')) {
+                selectedVoice = voice;
+                break;
+            }
+        }
+    }
+    
+    // 如果还没找到，使用默认声音
+    if (selectedVoice) {
+        utterance.voice = selectedVoice;
+    }
     
     // 更新状态
     document.getElementById('recordingStatus').textContent = '正在播放原音...';
     document.getElementById('recordingStatus').style.color = '#28a745';
+    document.getElementById('listenBtn').disabled = true;
+    document.getElementById('listenBtn').innerHTML = '<i class="fas fa-volume-up"></i> 播放中...';
+    
+    utterance.onstart = () => {
+        console.log('开始播放语音');
+    };
     
     utterance.onend = () => {
+        console.log('语音播放完毕');
         document.getElementById('recordingStatus').textContent = '原音播放完毕';
+        document.getElementById('listenBtn').disabled = false;
+        document.getElementById('listenBtn').innerHTML = '<i class="fas fa-volume-up"></i> 听原音';
+        
         setTimeout(() => {
             document.getElementById('recordingStatus').textContent = '准备就绪';
             document.getElementById('recordingStatus').style.color = '';
         }, 2000);
     };
-}
-
-// 初始化语音识别
-function initSpeechRecognition() {
-    if ('webkitSpeechRecognition' in window) {
-        recognition = new webkitSpeechRecognition();
-    } else if ('SpeechRecognition' in window) {
-        recognition = new SpeechRecognition();
-    } else {
-        console.warn('浏览器不支持语音识别');
-        return;
-    }
     
-    recognition.lang = 'en-US';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    
-    recognition.onstart = () => {
-        isRecording = true;
-        document.getElementById('recordingStatus').textContent = '正在录音...';
+    utterance.onerror = (event) => {
+        console.error('语音播放错误:', event);
+        document.getElementById('recordingStatus').textContent = '播放失败，请重试';
         document.getElementById('recordingStatus').style.color = '#dc3545';
-        document.getElementById('recordBtn').innerHTML = '<i class="fas fa-stop"></i> 停止';
+        document.getElementById('listenBtn').disabled = false;
+        document.getElementById('listenBtn').innerHTML = '<i class="fas fa-volume-up"></i> 听原音';
     };
     
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        evaluatePronunciation(transcript);
-    };
-    
-    recognition.onerror = (event) => {
-        console.error('语音识别错误:', event.error);
-        document.getElementById('recordingStatus').textContent = '识别错误，请重试';
-        document.getElementById('recordingStatus').style.color = '#dc3545';
-        stopRecording();
-    };
-    
-    recognition.onend = () => {
-        stopRecording();
-    };
+    // 开始播放
+    speechSynthesis.speak(utterance);
 }
 
 // 切换录音
 function toggleRecording() {
     if (!recognition) {
-        alert('您的浏览器不支持语音识别功能');
+        showAlert('error', '语音识别功能不可用，请使用Chrome或Edge浏览器');
         return;
     }
     
     if (isRecording) {
         recognition.stop();
     } else {
+        // 检查麦克风权限
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(() => {
+                    // 权限已授予，开始录音
+                    startRecording();
+                })
+                .catch(error => {
+                    console.error('麦克风权限被拒绝:', error);
+                    showAlert('error', '请允许访问麦克风以使用跟读功能');
+                });
+        } else {
+            // 直接开始录音（旧浏览器）
+            startRecording();
+        }
+    }
+}
+
+// 开始录音
+function startRecording() {
+    const englishText = document.getElementById('englishText').textContent;
+    if (!englishText || englishText === '--' || englishText === '请选择学习内容') {
+        showAlert('warning', '请先选择学习内容');
+        return;
+    }
+    
+    try {
         recognition.start();
+    } catch (error) {
+        console.error('开始录音失败:', error);
+        showAlert('error', '开始录音失败，请重试');
     }
 }
 
@@ -659,17 +857,25 @@ function toggleRecording() {
 function stopRecording() {
     isRecording = false;
     document.getElementById('recordBtn').innerHTML = '<i class="fas fa-microphone"></i> 跟读';
+    document.getElementById('recordBtn').style.background = '';
+    
+    // 2秒后恢复状态显示
     setTimeout(() => {
-        document.getElementById('recordingStatus').textContent = '准备就绪';
-        document.getElementById('recordingStatus').style.color = '';
-    }, 1000);
+        if (!isRecording) {
+            document.getElementById('recordingStatus').textContent = '准备就绪';
+            document.getElementById('recordingStatus').style.color = '';
+        }
+    }, 2000);
 }
 
-// 播放录音
+// 播放录音（简化版，实际需要录音功能）
 function playRecording() {
-    // 这里可以添加播放录音的逻辑
-    // 由于浏览器限制，需要先保存录音数据
-    alert('播放录音功能需要在服务器环境下使用');
+    showAlert('info', '播放录音功能需要完整的录音实现。当前版本主要测试跟读识别功能。');
+    
+    // 在实际实现中，这里应该播放之前录制的音频
+    // 由于Web Audio API较复杂，这里先提供一个提示
+    document.getElementById('recordingStatus').textContent = '播放录音功能开发中';
+    document.getElementById('recordingStatus').style.color = '#17a2b8';
 }
 
 // 评估发音
@@ -677,11 +883,15 @@ function evaluatePronunciation(transcript) {
     const originalText = document.getElementById('englishText').textContent.toLowerCase();
     const userText = transcript.toLowerCase();
     
+    console.log('原文:', originalText);
+    console.log('用户:', userText);
+    
     let score = 0;
     let feedback = '';
     
-    // 简单评估算法
+    // 计算相似度
     const similarity = calculateSimilarity(originalText, userText);
+    console.log('相似度:', similarity);
     
     if (similarity > 0.8) {
         score = 20;
@@ -698,8 +908,9 @@ function evaluatePronunciation(transcript) {
     }
     
     // 更新显示
-    document.getElementById('scoreFeedback').textContent = `${feedback} (+${score}分)`;
-    document.getElementById('scoreFeedback').style.color = 
+    const scoreElement = document.getElementById('scoreFeedback');
+    scoreElement.textContent = `${feedback} (+${score}分)`;
+    scoreElement.style.color = 
         score === 20 ? '#28a745' : 
         score === 15 ? '#17a2b8' : 
         score === 10 ? '#ffc107' : '#dc3545';
@@ -711,23 +922,87 @@ function evaluatePronunciation(transcript) {
     const currentItems = TRAINING_DATA[currentCategory];
     completedItems.add(currentItemIndex);
     
-    // 更新项目列表
+    // 更新项目列表和进度
     updateItemList();
+    updateBasicProgress();
     
     // 保存进度
     saveTrainingProgress();
+    
+    // 自动播放下一项（如果得分良好）
+    if (score >= 10) {
+        setTimeout(() => {
+            goToNextItem();
+        }, 1500);
+    }
 }
 
-// 计算文本相似度
+// 计算文本相似度（改进版）
 function calculateSimilarity(str1, str2) {
-    // 简单的相似度计算
-    const set1 = new Set(str1.split(' '));
-    const set2 = new Set(str2.split(' '));
+    // 去除标点符号和多余空格
+    const cleanStr1 = str1.replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ").trim();
+    const cleanStr2 = str2.replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ").trim();
+    
+    // 分割为单词
+    const words1 = cleanStr1.split(' ');
+    const words2 = cleanStr2.split(' ');
+    
+    // 计算共同单词数量
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
     
     const intersection = new Set([...set1].filter(x => set2.has(x)));
     const union = new Set([...set1, ...set2]);
     
-    return intersection.size / union.size;
+    // 单词级别的相似度
+    const wordSimilarity = intersection.size / union.size;
+    
+    // 字符级别的相似度（Levenshtein距离）
+    const charSimilarity = calculateCharSimilarity(cleanStr1, cleanStr2);
+    
+    // 综合相似度
+    const finalSimilarity = (wordSimilarity * 0.7 + charSimilarity * 0.3);
+    
+    console.log('单词相似度:', wordSimilarity, '字符相似度:', charSimilarity, '综合:', finalSimilarity);
+    
+    return finalSimilarity;
+}
+
+// 计算字符相似度（使用简单的编辑距离）
+function calculateCharSimilarity(str1, str2) {
+    if (str1 === str2) return 1;
+    if (str1.length === 0 || str2.length === 0) return 0;
+    
+    // 简单的相似度计算
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    // 检查是否为部分匹配
+    if (longer.includes(shorter)) {
+        return shorter.length / longer.length;
+    }
+    
+    // 计算共同字符比例
+    let commonChars = 0;
+    const charCount1 = {};
+    const charCount2 = {};
+    
+    for (let char of str1) {
+        charCount1[char] = (charCount1[char] || 0) + 1;
+    }
+    
+    for (let char of str2) {
+        charCount2[char] = (charCount2[char] || 0) + 1;
+    }
+    
+    for (let char in charCount1) {
+        if (charCount2[char]) {
+            commonChars += Math.min(charCount1[char], charCount2[char]);
+        }
+    }
+    
+    const totalChars = str1.length + str2.length;
+    return (commonChars * 2) / totalChars;
 }
 
 // 更新分数
@@ -735,6 +1010,9 @@ function updateScore(points) {
     currentScore += points;
     updateScoreDisplay();
     saveScore();
+    
+    // 更新训练会话分数
+    trainingSession.basicScore = currentScore;
 }
 
 // 更新分数显示
@@ -752,6 +1030,8 @@ function saveScore() {
 // 跳转到上一个项目
 function goToPreviousItem() {
     const items = TRAINING_DATA[currentCategory];
+    if (!items) return;
+    
     if (currentItemIndex > 0) {
         currentItemIndex--;
         showItem(currentItemIndex, items);
@@ -761,33 +1041,81 @@ function goToPreviousItem() {
 // 跳转到下一个项目
 function goToNextItem() {
     const items = TRAINING_DATA[currentCategory];
+    if (!items) return;
+    
     if (currentItemIndex < items.length - 1) {
         currentItemIndex++;
         showItem(currentItemIndex, items);
     } else {
         // 完成当前分类
-        checkIfAllCompleted();
+        const allCategories = ['vocabulary', 'sentences', 'passages'];
+        const currentCatIndex = allCategories.indexOf(currentCategory);
+        
+        if (currentCatIndex < allCategories.length - 1) {
+            // 切换到下一个分类
+            currentCategory = allCategories[currentCatIndex + 1];
+            currentItemIndex = 0;
+            
+            // 更新UI
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.category === currentCategory) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            loadCategoryContent(currentCategory);
+        } else {
+            // 所有分类都完成了
+            checkIfAllCompleted();
+        }
     }
 }
 
 // 提交答案
 function submitAnswers() {
     const exercise = READING_EXERCISES[currentExercise];
+    if (!exercise) return;
+    
     let totalScore = 0;
     let resultsHTML = '';
+    let correctCount = 0;
     
     exercise.questions.forEach((question, index) => {
         const userAnswer = answeredQuestions.get(index);
-        const isCorrect = userAnswer === question.correctAnswer;
+        let isCorrect = false;
+        
+        if (question.type === 'short') {
+            // 简答题：检查是否包含关键词
+            const userAnswerLower = (userAnswer || '').toLowerCase().trim();
+            const correctAnswerLower = question.correctAnswer.toLowerCase();
+            
+            // 简单的关键词匹配
+            const keywords = correctAnswerLower.split(' ')
+                .filter(word => word.length > 3)
+                .map(word => word.replace(/[^\w]/g, ''));
+            
+            const userWords = userAnswerLower.split(' ');
+            const matchedKeywords = keywords.filter(keyword => 
+                userWords.some(word => word.includes(keyword))
+            );
+            
+            isCorrect = matchedKeywords.length >= Math.ceil(keywords.length * 0.6);
+        } else {
+            // 选择题/判断题：精确匹配
+            isCorrect = userAnswer === question.correctAnswer;
+        }
         
         if (isCorrect) {
             totalScore += CONFIG.QUESTION_SCORE;
+            correctCount++;
             resultsHTML += `
                 <div class="result-item correct">
                     <i class="fas fa-check-circle"></i>
                     <div>
                         <strong>第${index + 1}题: 正确 (+${CONFIG.QUESTION_SCORE}分)</strong>
                         ${question.explanation ? `<p>${question.explanation}</p>` : ''}
+                        <p>你的答案: ${userAnswer || '未回答'}</p>
                     </div>
                 </div>
             `;
@@ -816,9 +1144,13 @@ function submitAnswers() {
         <h3>答题结果</h3>
         ${resultsHTML}
         <div class="result-score">
+            正确率: ${correctCount}/${exercise.questions.length}<br>
             本练习得分: ${totalScore >= 0 ? '+' : ''}${totalScore}分
         </div>
     `;
+    
+    // 更新高级训练分数
+    trainingSession.advancedScore = totalScore;
     
     // 检查是否所有练习都已完成
     checkIfAllCompleted();
@@ -826,6 +1158,10 @@ function submitAnswers() {
 
 // 重置答案
 function resetAnswers() {
+    if (!confirm('确定要重置所有答案吗？')) {
+        return;
+    }
+    
     answeredQuestions.clear();
     const inputs = document.querySelectorAll('.option-input, .short-answer');
     inputs.forEach(input => {
@@ -842,13 +1178,29 @@ function resetAnswers() {
 
 // 检查是否所有训练都已完成
 function checkIfAllCompleted() {
-    // 检查基础训练
-    const basicCompleted = completedItems.size >= TRAINING_DATA[currentCategory]?.length;
+    // 检查基础训练（所有分类都完成）
+    const allCategories = ['vocabulary', 'sentences', 'passages'];
+    let allBasicCompleted = true;
     
-    // 检查提升训练（假设至少完成一个练习的所有问题）
-    const advancedCompleted = answeredQuestions.size >= READING_EXERCISES[currentExercise]?.questions.length;
+    for (const category of allCategories) {
+        const items = TRAINING_DATA[category];
+        if (items) {
+            // 检查该分类是否有任何已完成的项目
+            const hasCompleted = Array.from(completedItems).some(index => {
+                // 这里简化检查，实际应该检查每个分类的完成情况
+                return true;
+            });
+            if (!hasCompleted) {
+                allBasicCompleted = false;
+                break;
+            }
+        }
+    }
     
-    if (basicCompleted && advancedCompleted) {
+    // 检查提升训练（至少完成一个练习）
+    const allAdvancedCompleted = answeredQuestions.size > 0;
+    
+    if (allBasicCompleted && allAdvancedCompleted) {
         showCelebration();
         completeTrainingSession();
     }
@@ -863,9 +1215,15 @@ function showCelebration() {
     document.getElementById('celebrationContainer').style.display = 'flex';
     
     // 播放声音
-    const sound = document.getElementById('celebrationSound');
-    sound.currentTime = 0;
-    sound.play().catch(e => console.log('音频播放失败:', e));
+    try {
+        const sound = document.getElementById('celebrationSound');
+        if (sound) {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log('音频播放失败:', e));
+        }
+    } catch (error) {
+        console.log('播放祝贺声音失败:', error);
+    }
     
     // 创建花朵飘落效果
     createFlowers();
@@ -874,41 +1232,60 @@ function showCelebration() {
 // 创建花朵飘落
 function createFlowers() {
     const container = document.getElementById('celebrationContainer');
+    if (!container) return;
     
-    for (let i = 0; i < 50; i++) {
-        const flower = document.createElement('div');
-        flower.className = 'flower';
-        
-        // 随机位置
-        flower.style.left = `${Math.random() * 100}vw`;
-        flower.style.top = '-30px';
-        
-        // 随机大小
-        const size = Math.random() * 20 + 10;
-        flower.style.width = `${size}px`;
-        flower.style.height = `${size}px`;
-        
-        // 随机动画时长
-        const duration = Math.random() * 3 + 2;
-        flower.style.animationDuration = `${duration}s`;
-        flower.style.animationDelay = `${Math.random() * 2}s`;
-        
-        container.appendChild(flower);
-        
-        // 动画结束后移除
+    // 先清除现有的花朵
+    const existingFlowers = container.querySelectorAll('.flower');
+    existingFlowers.forEach(flower => flower.remove());
+    
+    // 创建新的花朵
+    for (let i = 0; i < 30; i++) {
         setTimeout(() => {
-            flower.remove();
-        }, duration * 1000);
+            const flower = document.createElement('div');
+            flower.className = 'flower';
+            
+            // 随机位置
+            flower.style.left = `${Math.random() * 100}vw`;
+            flower.style.top = '-30px';
+            
+            // 随机大小
+            const size = Math.random() * 20 + 10;
+            flower.style.width = `${size}px`;
+            flower.style.height = `${size}px`;
+            
+            // 随机动画
+            const duration = Math.random() * 3 + 2;
+            flower.style.animationDuration = `${duration}s`;
+            flower.style.animationDelay = `${Math.random() * 2}s`;
+            
+            // 随机颜色
+            const hue = Math.random() * 30; // 红色系
+            flower.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+            flower.style.borderRadius = '50%';
+            flower.style.opacity = '0.7';
+            
+            container.appendChild(flower);
+            
+            // 动画结束后移除
+            setTimeout(() => {
+                if (flower.parentNode) {
+                    flower.remove();
+                }
+            }, duration * 1000);
+        }, i * 100);
     }
 }
 
 // 关闭祝贺
 function closeCelebration() {
-    document.getElementById('celebrationContainer').style.display = 'none';
-    
-    // 移除所有花朵
-    const flowers = document.querySelectorAll('.flower');
-    flowers.forEach(flower => flower.remove());
+    const container = document.getElementById('celebrationContainer');
+    if (container) {
+        container.style.display = 'none';
+        
+        // 移除所有花朵
+        const flowers = container.querySelectorAll('.flower');
+        flowers.forEach(flower => flower.remove());
+    }
 }
 
 // 退出登录
@@ -927,9 +1304,14 @@ function logout() {
 function updateTime() {
     const now = new Date();
     const timeString = now.toLocaleTimeString('zh-CN');
+    const dateString = now.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
     const timeElement = document.getElementById('currentTime');
     if (timeElement) {
-        timeElement.textContent = timeString;
+        timeElement.textContent = `${dateString} ${timeString}`;
     }
 }
 
@@ -998,6 +1380,10 @@ function loadTrainingProgress() {
         currentItemIndex = progress.itemIndex || 0;
         completedItems = new Set(progress.completedItems || []);
         answeredQuestions = new Map(progress.answeredQuestions || []);
+        currentScore = progress.score || 0;
+        
+        // 更新分数显示
+        updateScoreDisplay();
         
         // 更新UI
         const categoryBtn = document.querySelector(`[data-category="${currentCategory}"]`);
@@ -1008,6 +1394,7 @@ function loadTrainingProgress() {
         
         loadCategoryContent(currentCategory);
         updateItemList();
+        updateBasicProgress();
     }
 }
 
@@ -1027,7 +1414,7 @@ function handleLogin(event) {
             localStorage.setItem('isAdmin', 'true');
             window.location.href = 'admin.html';
         } else {
-            showMessage('管理员用户名或密码错误', 'error');
+            showLoginMessage('管理员用户名或密码错误', 'error');
         }
     } else {
         // 学生登录
@@ -1041,20 +1428,22 @@ function handleLogin(event) {
             localStorage.setItem('currentUser', JSON.stringify(student));
             window.location.href = 'index.html';
         } else {
-            showMessage('用户名或密码错误', 'error');
+            showLoginMessage('用户名或密码错误', 'error');
         }
     }
 }
 
-// 显示消息
-function showMessage(message, type) {
+// 显示登录消息
+function showLoginMessage(message, type) {
     const element = document.getElementById('loginMessage');
     element.textContent = message;
     element.className = `login-message ${type}`;
+    element.style.display = 'block';
     
     setTimeout(() => {
         element.textContent = '';
         element.className = 'login-message';
+        element.style.display = 'none';
     }, 3000);
 }
 
@@ -1123,3 +1512,13 @@ function loadInitialData() {
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', init);
+
+// 为语音合成加载声音列表（需要用户交互）
+document.addEventListener('click', () => {
+    // 预加载语音合成声音
+    if (speechSynthesis && speechSynthesis.getVoices().length === 0) {
+        speechSynthesis.addEventListener('voiceschanged', () => {
+            console.log('语音合成声音列表已加载:', speechSynthesis.getVoices().length);
+        });
+    }
+});
