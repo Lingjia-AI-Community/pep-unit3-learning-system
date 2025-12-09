@@ -1522,3 +1522,135 @@ document.addEventListener('click', () => {
         });
     }
 });
+
+// 修改登录处理函数
+async function handleLogin(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const loginType = document.getElementById('loginType').value;
+    
+    // 使用云端登录
+    const result = await cloudSync.login(username, password, loginType);
+    
+    if (result.success) {
+        // 保存登录状态
+        localStorage.setItem('currentUser', JSON.stringify(result.user));
+        
+        // 如果是管理员，跳转到后台
+        if (loginType === 'admin') {
+            localStorage.setItem('isAdmin', 'true');
+            window.location.href = 'admin.html';
+        } else {
+            window.location.href = 'index.html';
+        }
+    } else {
+        showLoginMessage(result.error || '登录失败', 'error');
+    }
+}
+
+// 修改保存训练会话函数
+async function saveTrainingSession() {
+    if (!currentUser) return;
+    
+    const sessions = JSON.parse(localStorage.getItem(`sessions_${currentUser.id}`) || '[]');
+    sessions.push(trainingSession);
+    localStorage.setItem(`sessions_${currentUser.id}`, JSON.stringify(sessions));
+    
+    // 同步到云端
+    try {
+        await cloudSync.saveData('training_session', trainingSession, currentUser.id);
+        console.log('训练数据已同步到云端');
+    } catch (error) {
+        console.log('训练数据同步到云端失败:', error.message);
+    }
+}
+
+// 修改保存训练进度函数
+async function saveTrainingProgress() {
+    if (!currentUser) return;
+    
+    const progress = {
+        category: currentCategory,
+        itemIndex: currentItemIndex,
+        completedItems: Array.from(completedItems),
+        answeredQuestions: Array.from(answeredQuestions.entries()),
+        score: currentScore,
+        timestamp: new Date().toISOString()
+    };
+    
+    localStorage.setItem(`progress_${currentUser.id}`, JSON.stringify(progress));
+    
+    // 同步到云端
+    try {
+        await cloudSync.saveData('progress', progress, currentUser.id);
+    } catch (error) {
+        console.log('进度数据同步到云端失败:', error.message);
+    }
+}
+
+// 修改保存分数函数
+async function saveScore() {
+    if (!currentUser) return;
+    
+    localStorage.setItem(`score_${currentUser.id}`, currentScore);
+    
+    // 同步到云端
+    try {
+        await cloudSync.saveData('score', currentScore, currentUser.id);
+    } catch (error) {
+        console.log('分数数据同步到云端失败:', error.message);
+    }
+}
+
+// 修改加载训练进度函数
+async function loadTrainingProgress() {
+    if (!currentUser) return;
+    
+    // 尝试从云端获取进度
+    const progress = await cloudSync.getData('progress', currentUser.id);
+    
+    if (progress) {
+        currentCategory = progress.category || 'vocabulary';
+        currentItemIndex = progress.itemIndex || 0;
+        completedItems = new Set(progress.completedItems || []);
+        answeredQuestions = new Map(progress.answeredQuestions || []);
+        currentScore = progress.score || 0;
+        
+        // 更新UI
+        updateScoreDisplay();
+        
+        const categoryBtn = document.querySelector(`[data-category="${currentCategory}"]`);
+        if (categoryBtn) {
+            document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
+            categoryBtn.classList.add('active');
+        }
+        
+        loadCategoryContent(currentCategory);
+        updateItemList();
+        updateBasicProgress();
+    } else {
+        // 回退到本地数据
+        const localProgress = JSON.parse(localStorage.getItem(`progress_${currentUser.id}`) || '{}');
+        if (localProgress.category) {
+            currentCategory = localProgress.category;
+            currentItemIndex = localProgress.itemIndex || 0;
+            completedItems = new Set(localProgress.completedItems || []);
+            answeredQuestions = new Map(localProgress.answeredQuestions || []);
+            currentScore = localProgress.score || 0;
+            
+            updateScoreDisplay();
+            
+            const categoryBtn = document.querySelector(`[data-category="${currentCategory}"]`);
+            if (categoryBtn) {
+                document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
+                categoryBtn.classList.add('active');
+            }
+            
+            loadCategoryContent(currentCategory);
+            updateItemList();
+            updateBasicProgress();
+        }
+    }
+}
