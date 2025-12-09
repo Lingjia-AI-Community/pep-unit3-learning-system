@@ -1,4 +1,333 @@
 // 管理员系统配置
+// 在 admin.js 开头添加
+let cloudSync = null;
+
+// 修改初始化函数
+async function initAdminPage() {
+    // 检查管理员登录状态
+    checkAdminLogin();
+    
+    // 初始化云端同步
+    cloudSync = new CloudSync();
+    
+    // 等待云端同步初始化
+    setTimeout(async () => {
+        // 初始化导航
+        initAdminNavigation();
+        
+        // 初始化学生管理
+        initStudentManagement();
+        
+        // 初始化训练情况
+        initTrainingManagement();
+        
+        // 初始化数据管理
+        initDataManagement();
+        
+        // 初始化事件监听
+        initAdminEventListeners();
+        
+        // 加载数据（从云端）
+        await loadAllData();
+        
+        // 更新云端状态
+        updateCloudStatus();
+    }, 1000);
+}
+
+// 修改加载所有数据函数
+async function loadAllData() {
+    await loadStudents();
+    await loadTrainingSessions();
+    await updateSystemStats();
+}
+
+// 修改加载学生数据函数
+async function loadStudents() {
+    // 从云端获取学生数据
+    const students = await cloudSync.getAllStudents();
+    const tableBody = document.getElementById('studentsTable').querySelector('tbody');
+    const studentFilter = document.getElementById('studentFilter');
+    
+    tableBody.innerHTML = '';
+    studentFilter.innerHTML = '<option value="all">所有学生</option>';
+    
+    students.forEach((student, index) => {
+        // 添加到表格
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${student.name}</td>
+            <td>${student.id}</td>
+            <td>${student.password}</td>
+            <td class="actions">
+                <button class="edit-btn" data-id="${student.id}">
+                    <i class="fas fa-edit"></i> 编辑
+                </button>
+                <button class="delete-btn" data-id="${student.id}">
+                    <i class="fas fa-trash"></i> 删除
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+        
+        // 添加到筛选器
+        const option = document.createElement('option');
+        option.value = student.id;
+        option.textContent = student.name;
+        studentFilter.appendChild(option);
+    });
+    
+    // 更新计数
+    document.getElementById('studentCount').textContent = students.length;
+    document.getElementById('systemStudentCount').textContent = students.length;
+    
+    // 添加事件监听
+    tableBody.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => editStudent(btn.dataset.id));
+    });
+    
+    tableBody.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteStudent(btn.dataset.id));
+    });
+}
+
+// 修改加载训练会话函数
+async function loadTrainingSessions() {
+    // 从云端获取训练数据
+    allTrainingSessions = await cloudSync.getAllTrainingData();
+    
+    updateTrainingTable();
+    updateTrainingStats();
+}
+
+// 修改添加学生函数
+async function addNewStudent(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('newName').value.trim();
+    const studentId = document.getElementById('newStudentId').value.trim();
+    const password = document.getElementById('newPassword').value.trim();
+    
+    if (!name || !studentId || !password) {
+        showToast('请填写所有字段', 'error');
+        return;
+    }
+    
+    const students = await cloudSync.getAllStudents();
+    
+    // 检查学号是否重复
+    if (students.some(s => s.id === studentId)) {
+        showToast('学号已存在', 'error');
+        return;
+    }
+    
+    // 添加新学生
+    students.push({
+        id: studentId,
+        name: name,
+        password: password
+    });
+    
+    // 保存到本地
+    localStorage.setItem('students', JSON.stringify(students));
+    
+    // 同步到云端
+    try {
+        await cloudSync.saveData('students', students);
+        showToast('学生添加成功，已同步到云端', 'success');
+    } catch (error) {
+        showToast('学生添加成功，但云端同步失败', 'warning');
+    }
+    
+    // 重置表单并更新显示
+    toggleAddStudentForm(false);
+    await loadStudents();
+}
+
+// 修改删除学生函数
+async function deleteStudent(studentId) {
+    if (!confirm(`确定要删除学号为 ${studentId} 的学生吗？此操作不可恢复。`)) {
+        return;
+    }
+    
+    let students = await cloudSync.getAllStudents();
+    students = students.filter(s => s.id !== studentId);
+    
+    // 保存到本地
+    localStorage.setItem('students', JSON.stringify(students));
+    
+    // 同步到云端
+    try {
+        await cloudSync.saveData('students', students);
+    } catch (error) {
+        console.log('云端同步失败:', error);
+    }
+    
+    // 删除相关的训练数据
+    localStorage.removeItem(`sessions_${studentId}`);
+    localStorage.removeItem(`progress_${studentId}`);
+    localStorage.removeItem(`score_${studentId}`);
+    
+    await loadStudents();
+    await loadTrainingSessions();
+    showToast('学生删除成功', 'success');
+}
+
+// 在 admin.js 中添加云端状态显示函数
+function updateCloudStatus() {
+    const status = document.getElementById('storageStatus');
+    if (status && cloudSync) {
+        if (cloudSync.isOnline) {
+            status.innerHTML = '<span style="color: #28a745;">✓ 云端连接正常</span>';
+        } else {
+            status.innerHTML = '<span style="color: #dc3545;">✗ 云端不可用（离线模式）</span>';
+        }
+    }
+}
+
+// 添加云端管理UI（在数据管理部分）
+function addCloudManagementUI() {
+    const dataSection = document.getElementById('dataSection');
+    
+    const cloudHTML = `
+        <div class="cloud-management-section">
+            <h3><i class="fas fa-cloud"></i> 云端数据管理</h3>
+            
+            <div class="cloud-controls">
+                <div class="cloud-status-card">
+                    <div class="status-header">
+                        <i class="fas fa-sync-alt"></i>
+                        <h4>同步状态</h4>
+                    </div>
+                    <div class="status-content">
+                        <div class="status-item">
+                            <span class="status-label">云端连接:</span>
+                            <span id="cloudConnectionStatus" class="status-value">检查中...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">待同步数据:</span>
+                            <span id="pendingSyncCount" class="status-value">0 条</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">最后同步:</span>
+                            <span id="lastSyncTime" class="status-value">从未同步</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="cloud-actions">
+                    <button id="forceSyncBtn" class="action-btn">
+                        <i class="fas fa-cloud-upload-alt"></i> 强制同步到云端
+                    </button>
+                    <button id="refreshCloudBtn" class="action-btn">
+                        <i class="fas fa-cloud-download-alt"></i> 从云端刷新数据
+                    </button>
+                    <button id="checkConflictBtn" class="action-btn">
+                        <i class="fas fa-exchange-alt"></i> 检查数据冲突
+                    </button>
+                </div>
+            </div>
+            
+            <div id="cloudSyncResult" class="sync-result"></div>
+        </div>
+    `;
+    
+    dataSection.insertAdjacentHTML('afterbegin', cloudHTML);
+    
+    // 添加事件监听
+    document.getElementById('forceSyncBtn').addEventListener('click', async () => {
+        await forceSyncToCloud();
+    });
+    
+    document.getElementById('refreshCloudBtn').addEventListener('click', async () => {
+        await refreshFromCloud();
+    });
+    
+    document.getElementById('checkConflictBtn').addEventListener('click', async () => {
+        await checkDataConflicts();
+    });
+    
+    // 更新状态
+    updateCloudManagementStatus();
+    setInterval(updateCloudManagementStatus, 30000);
+}
+
+// 强制同步到云端
+async function forceSyncToCloud() {
+    try {
+        showToast('正在同步到云端...', 'info');
+        
+        const result = await cloudSync.syncAllToCloud();
+        
+        if (result.success) {
+            showToast('数据同步到云端成功', 'success');
+            await loadAllData();
+        } else {
+            showToast(result.error || '同步失败', 'error');
+        }
+    } catch (error) {
+        showToast(`同步失败: ${error.message}`, 'error');
+    }
+}
+
+// 从云端刷新数据
+async function refreshFromCloud() {
+    try {
+        showToast('正在从云端刷新数据...', 'info');
+        
+        // 重新加载所有数据
+        await loadAllData();
+        
+        showToast('数据刷新成功', 'success');
+    } catch (error) {
+        showToast(`刷新失败: ${error.message}`, 'error');
+    }
+}
+
+// 检查数据冲突
+async function checkDataConflicts() {
+    showToast('数据冲突检查功能开发中', 'info');
+}
+
+// 更新云端管理状态
+function updateCloudManagementStatus() {
+    if (!cloudSync) return;
+    
+    // 更新连接状态
+    const connectionStatus = document.getElementById('cloudConnectionStatus');
+    if (connectionStatus) {
+        if (cloudSync.isOnline) {
+            connectionStatus.innerHTML = '<span style="color: #28a745;">已连接</span>';
+        } else {
+            connectionStatus.innerHTML = '<span style="color: #dc3545;">未连接</span>';
+        }
+    }
+    
+    // 更新待同步数据
+    const pendingSync = JSON.parse(localStorage.getItem('pending_sync') || '[]');
+    const pendingCount = document.getElementById('pendingSyncCount');
+    if (pendingCount) {
+        pendingCount.textContent = `${pendingSync.length} 条`;
+        if (pendingSync.length > 0) {
+            pendingCount.style.color = '#ffc107';
+        } else {
+            pendingCount.style.color = '';
+        }
+    }
+    
+    // 更新最后同步时间
+    const lastSync = localStorage.getItem('last_sync_time');
+    const lastSyncTime = document.getElementById('lastSyncTime');
+    if (lastSyncTime) {
+        if (lastSync) {
+            const time = new Date(lastSync);
+            lastSyncTime.textContent = time.toLocaleString('zh-CN');
+        } else {
+            lastSyncTime.textContent = '从未同步';
+        }
+    }
+}
 const ADMIN_CONFIG = {
     SYSTEM_NAME: 'Pep unit3 learning system - Admin',
     EXPORT_FORMATS: ['csv', 'json', 'xlsx'],
